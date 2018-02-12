@@ -1,0 +1,188 @@
+* ectoo
+** dbcontroller.sh
+   :PROPERTIES:
+   :header-args: :tangle dbcontroller.sh :comments org
+   :END:
+   #+BEGIN_SRC sh
+     # Delete Database
+
+     sqlcommands=""
+     set_sql_delete() {
+	 dbname="$1"
+	 dbuser="$2"
+	 sqlcommands+="DROP DATABASE IF EXISTS $dbname;"
+	 sqlcommands+="DELETE FROM mysql.user WHERE User='$dbuser';"
+     }
+
+     set_sql_create() {
+	 dbname="$1"
+	 dbuser="$2"
+	 dbpass="$3"
+	 set_sql_delete $dbname $dbuser
+	 sqlcommands+="CREATE DATABASE $dbname;"
+	 sqlcommands+="GRANT ALL ON $dbname.* TO '$dbuser'@'localhost' IDENTIFIED BY '$dbpass';"
+     }
+
+     mysql_execute() {
+	 echo "$sqlcommands"
+	 echo ""
+	 echo -n "MariaDB root password: "
+	 read -s MARIADB_ROOT_PASSWORD
+	 mysql -u root -p$MARIADB_ROOT_PASSWORD -e "$sqlcommands"
+	 echo ""
+     }
+
+     do_create() {
+	 echo "create"
+	 echo "Creating a new MariaDB database and user."
+	 echo -n "Dabase name: "
+	 read DB_NAME
+	 echo -n "Database user: "
+	 read DB_USER
+	 echo -n "Database user password: "
+	 read -s DB_PASS
+	 echo ""
+	 set_sql_create $DB_NAME $DB_USER $DB_PASS
+	 mysql_execute
+     }
+
+     do_delete() {
+	 echo "delete"
+	 echo "Deleting a MariaDB database and user."
+	 echo -n "Database name: "
+	 read DB_NAME
+	 echo -n "Database user: "
+	 read DB_USER
+	 set_sql_delete $DB_NAME $DB_USER 
+	 mysql_execute
+     }
+
+     if [[ "create" = $1 ]]; then
+	 do_create
+     elif [[ "delete" = $1 ]]; then
+	 do_delete
+     else
+	 echo "Usage: $0 command (create or delete)"
+     fi
+
+   #+END_SRC
+
+** ec2init.sh
+   :PROPERTIES:
+   :header-args: :tangle ec2init.sh :comments org
+   :END:
+*** Read MariaDB Passwords
+    Better way to do this: when installing MariaDB and running mysql_secure_installation, don't create a root password there. This can be created on the command line later.
+    #+BEGIN_SRC sh
+      get_passwords_for_db() {
+	  echo -n "Enter the current root password for MariaDB: "
+	  read -s CURRENT_DB_PASS
+	  echo ""
+	  echo -n "Enter a new root password for MariaDB: "
+	  read -s DB_PASS
+      }
+    #+END_SRC
+
+*** LAMP for Amazon Linux 2
+    #+BEGIN_SRC sh
+      lamp_install () {
+	  sudo yum update -y
+	  sudo yum install -y augeas git gd xmllib
+	  sudo amazon-linux-extras install lamp-mariadb10.2-php7.2
+	  sudo yum install -y httpd php mariadb-server php-mysqlnd
+	  sudo yum install -y php-mbstring
+
+	  #for emacs
+	  sudo yum install -y ncurses-devel zlib-devel openssl-devel
+      }
+
+
+    #+END_SRC
+
+*** Cerbot
+    #+BEGIN_SRC sh
+      get_certbot() {
+	  wget https://bootstrap.pypa.io/get-pip.py
+	  sudo python get-pip.py
+	  mv get-pip.py ~/bin/get-pip.py
+	  sudo pip install virtualenv pyOpenSSL ndg-httpsclient pyasn1 requests==2.5.3
+	  sudo pip install certbot
+      }
+    #+END_SRC
+
+*** MariaDB Config
+    #+BEGIN_SRC sh
+      mariadb_config() {
+	  sudo systemctl stop mariadb
+	  sudo systemctl start mariadb
+	  #echo -e "${CURRENT_DB_PASS}\n\n${DB_PASS}\n${DB_PASS}\n\n\ny\n\n " | mysql_secure_installation
+	  echo -e "\nn\n\n\n\n\ny\n\n " | mysql_secure_installation
+	  sudo systemctl stop mariadb
+	  sudo systemctl enable mariadb
+      }
+    #+END_SRC
+*** Apache Config
+    #+BEGIN_SRC sh
+      apache_config() {
+
+	  sudo chown -R ec2-user:apache /var/www
+	  sudo chmod 2775 /var/www && find /var/www -type d -exec sudo chmod 2775 {} \;
+	  find /var/www -type f -exec sudo chmod 0664 {} \;
+	  sudo systemctl start httpd
+	  sudo systemctl enable httpd
+	  sudo systemctl is-enabled httpd
+	  sudo usermod -a -G apache ec2-user
+	  echo "You must log out and log back in to register the user ec2-user into the apache group"
+
+      }
+    #+END_SRC
+*** Configure home directory
+    #+BEGIN_SRC sh
+      configure_home_directory() {
+	  if [ ! -d "~/bin" ]; then
+	      mkdir ~/bin
+	  fi
+      }
+    #+END_SRC
+** presser.sh
+   :PROPERTIES:
+   :header-args: :tangle presser.sh :comments org
+   :END:
+*** Create wp-config.php with salts
+    #+BEGIN_SRC sh
+      wp_create_config_file() {
+
+	  database_name_here="MYDB"
+	  username_here="MYUSER"
+	  password_here="MYPASS"
+	  echo "<?php"
+	  echo "define('DB_NAME', '$database_name_here');"
+	  echo "define('DB_USER', '$username_here');"
+	  echo "define('DB_PASSWORD', '$password_here');"
+	  echo "define('DB_HOST', 'localhost');"
+	  echo "define('DB_CHARSET', 'utf8');"
+	  echo "define('DB_COLLATE', '');"
+	  cat $TMP_SALTS_FILE
+	  echo $salts
+	  echo "\$table_prefix  = 'wp_';"
+	  echo "define('WP_DEBUG', false);"
+	  echo "define( 'WP_ALLOW_MULTISITE', true );"
+
+	  echo "if ( !defined('ABSPATH') )
+	      define('ABSPATH', dirname(__FILE__) . '/');"
+	  echo "require_once(ABSPATH . 'wp-settings.php');"
+      }
+
+      wp_create_config_file_setup () {
+	  TMP_SALTS_FILE=/tmp/salts.txt
+	  TMP_WP_CONFIG_FILE=/tmp/wp-config.php
+
+	  wget -O $WP_SALTS_FILE https://api.wordpress.org/secret-key/1.1/salt/
+	  wp_create_config_file > $TMP_WP_CONFIG_FILE
+	  rm $TMP_SALTS_FILE
+      }
+
+    #+END_SRC
+
+
+
