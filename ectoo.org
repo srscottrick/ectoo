@@ -57,13 +57,15 @@
 	 mysql_execute
      }
 
-     if [[ "create" = $1 ]]; then
-	 do_create
-     elif [[ "delete" = $1 ]]; then
-	 do_delete
-     else
-	 echo "Usage: $0 command (create or delete)"
-     fi
+     do_command_line() {
+	 if [[ "create" = $1 ]]; then
+	     do_create
+	 elif [[ "delete" = $1 ]]; then
+	     do_delete
+	 else
+	     echo "Usage: $0 command (create or delete)"
+	 fi
+     }
 
    #+END_SRC
 
@@ -90,7 +92,7 @@
 	  sudo yum install -y augeas git gd xmllib
 	  sudo amazon-linux-extras install lamp-mariadb10.2-php7.2
 	  sudo yum install -y httpd php mariadb-server php-mysqlnd
-	  sudo yum install -y php-mbstring
+	  sudo yum install -y php-mbstring php-gd
 
 	  #for emacs
 	  sudo yum install -y ncurses-devel zlib-devel openssl-devel
