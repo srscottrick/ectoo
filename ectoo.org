@@ -92,7 +92,7 @@
 	  sudo yum install -y augeas git gd xmllib
 	  sudo amazon-linux-extras install lamp-mariadb10.2-php7.2
 	  sudo yum install -y httpd php mariadb-server php-mysqlnd
-	  sudo yum install -y php-mbstring php-gd
+	  sudo yum install -y php-mbstring php-gd php-xml
 
 	  #for emacs
 	  sudo yum install -y ncurses-devel zlib-devel openssl-devel
@@ -194,5 +194,11 @@
 	  sudo chmod 2775 $TARGET_DIR && find $TARGET_DIR -type d -exec sudo chmod 2775 {} \;
 	  find $TARGET_DIR -type f -exec sudo chmod 0664 {} \;
       }
+
+    #+END_SRC
+*** Remove "Comments Off" Label
+    https://organicweb.com.au/15801/wordpress/woothemes-remove-comments-off/
+    #+BEGIN_SRC css
+    .post-comments span { display:none }
 
     #+END_SRC
