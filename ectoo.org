@@ -202,3 +202,14 @@
     .post-comments span { display:none }
 
     #+END_SRC
+** Composer (for php)
+   https://gist.github.com/asugai/6694502
+   #+BEGIN_SRC sh
+     cd ~
+     sudo curl -sS https://getcomposer.org/installer | sudo php
+     sudo mv composer.phar /usr/local/bin/composer
+     sudo ln -s /usr/local/bin/composer /usr/bin/composer
+
+     //then you can run 
+     //sudo composer install
+   #+END_SRC
